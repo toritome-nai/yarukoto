@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>とりとめのないきろく</title>
+    <link href="https://fonts.googleapis.com/css2?family=Shizuru&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --bg: #4a3b33; 
+            --card: #ffffff; 
+            --text: #463F3A;
+        }
+        body { 
+            font-family: sans-serif; 
+            background-color: var(--bg); 
+            background-image: radial-gradient(#5a4a41 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: var(--text); 
+            padding: 15px; 
+            max-width: 500px; 
+            margin: 0 auto; 
+            padding-bottom: 100px; 
+        }
+        h1 { font-family: 'Shizuru', cursive; font-size: 2.1rem; text-align: center; color: #ffffff; margin-bottom: 10px; font-weight: normal; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        
+        #random-cheer { text-align: center; color: #d9c5b2; font-style: italic; font-size: 0.8rem; margin-bottom: 15px; min-height: 2.4em; line-height: 1.2; }
+
+        .top-dashboard { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+        .column-card { background: rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 5px; backdrop-filter: blur(8px); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+        .col-icon { font-size: 1.2rem; margin-bottom: 5px; }
+        .date-info { font-size: 0.85rem; font-weight: bold; }
+        .garbage-text { font-size: 0.65rem; line-height: 1.4; }
+        .timer-display { font-size: 1rem; font-weight: bold; margin: 3px 0; }
+        .timer-btn { background: white; color: var(--bg); border: none; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 0.65rem; }
+
+        .mid-dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+        .fold-section { background: rgba(255,255,255,0.1); border-radius: 10px; padding: 12px; color: white; border: 1px solid rgba(255,255,255,0.1); }
+        .fold-header { cursor: pointer; display: flex; justify-content: space-between; font-size: 0.75rem; opacity: 0.9; align-items: center; }
+        .fold-content { display: none; margin-top: 10px; }
+        
+        .log-input { width: 100%; background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.3); color: white; font-size: 0.75rem; outline: none; margin-bottom: 8px; }
+        .log-item { font-size: 0.7rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 4px 0; display: flex; justify-content: space-between; align-items: center; line-height: 1.3; }
+
+        .progress-container { width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-bottom: 20px; overflow: hidden; }
+        #progress-bar { height: 100%; width: 0%; background: #ffffff; transition: width 0.3s ease; }
+
+        .category-section { background: #f2e9e1; border-radius: 4px; padding: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); color: var(--text); position: relative; }
+        .cat-header { display: flex; justify-content: space-between; align-items: center; }
+        .cat-title { cursor: pointer; flex-grow: 1; display: flex; align-items: center; }
+        h2 { font-size: 0.95rem; margin: 0; padding-left: 8px; display: flex; align-items: center; border-left: 4px solid #ccc; }
+        
+        .order-btns { display: flex; gap: 4px; }
+        .order-btn { border: none; background: rgba(0,0,0,0.05); cursor: pointer; font-size: 0.6rem; padding: 2px 4px; border-radius: 3px; color: #888; }
+        
+        .task-list { margin-top: 12px; display: none; }
+        .task-item { border-bottom: 1px solid rgba(0,0,0,0.05); padding: 8px 0; }
+        .task-main { display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; }
+        .task-done { text-decoration: line-through; opacity: 0.5; }
+        .deadline-tag { font-size: 0.6rem; color: #BC2026; background: #ffebee; padding: 1px 3px; border-radius: 2px; margin-left: 5px; }
+        .memo-text { font-size: 0.7rem; color: #888; margin-left: 25px; margin-top: 3px; font-style: italic; }
+
+        .task-actions { display: flex; gap: 5px; }
+        .action-btn { border: none; background: none; color: #bbb; cursor: pointer; font-size: 0.7rem; }
+
+        .footer-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 20px; }
+        .footer-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 10px 4px; font-size: 0.65rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 50px; }
+
+        #deadline-alert-area { background: #ffebee; color: #BC2026; padding: 8px; border-radius: 8px; font-size: 0.7rem; margin-bottom: 15px; display: none; font-weight: bold; text-align: center; }
+    </style>
+</head>
+<body>
+    <h1>とりとめのないきろく</h1>
+    <div id="random-cheer"></div>
+    <div id="deadline-alert-area"></div>
+
+    <div class="top-dashboard">
+        <div class="column-card">
+            <span class="col-icon">📅</span>
+            <div class="date-info" id="col-date"></div>
+        </div>
+        <div class="column-card">
+            <span class="col-icon">🗑</span>
+            <div class="garbage-text" id="col-garbage"></div>
+        </div>
+        <div class="column-card">
+            <span class="col-icon" id="steam-icon">☕</span>
+            <span class="timer-display" id="timer-display">25:00</span>
+            <button class="timer-btn" onclick="toggleTimer()" id="timer-btn">Start</button>
+        </div>
+    </div>
+
+    <div class="mid-dashboard">
+        <div class="fold-section">
+            <div class="fold-header" onclick="toggleSection('log-content', 'log-arrow')">
+                <span>✍ おぼえがき</span>
+                <span id="log-arrow">▶</span>
+            </div>
+            <div id="log-content" class="fold-content">
+                <input type="text" id="log-input" class="log-input" placeholder="記す..." onkeydown="if(event.key==='Enter')addLog()">
+                <div id="log-list"></div>
+            </div>
+        </div>
+
+        <div class="fold-section">
+            <div class="fold-header" onclick="toggleSection('achieve-content', 'achieve-arrow')">
+                <span>✨ 達成したこと</span>
+                <span id="achieve-arrow">▶</span>
+            </div>
+            <div id="achieve-content" class="fold-content">
+                <input type="text" id="achieve-input" class="log-input" placeholder="できたこと..." onkeydown="if(event.key==='Enter')addAchieve()">
+                <div id="achieve-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="progress-container"><div id="progress-bar"></div></div>
+    <div id="app"></div>
+
+    <div class="footer-3col">
+        <button class="footer-btn" onclick="addCategory()">＋<br>カテゴリ追加</button>
+        <button class="footer-btn" onclick="archiveAndReset()">帳を<br>めくる</button>
+        <button class="footer-btn" onclick="toggleHistory()">あゆみを<br>見返す</button>
+    </div>
+
+    <div id="history-area" style="display:none; color:white; margin-top:20px;"><div id="history-list"></div></div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyA6DGhK7y6iU-xBwL7cUAjCxfC5SM3IZoA",
+            authDomain: "toritome-no-kiroku.firebaseapp.com",
+            projectId: "toritome-no-kiroku",
+            storageBucket: "toritome-no-kiroku.firebasestorage.app",
+            messagingSenderId: "1040466960434",
+            appId: "1:1040466960434:web:ee6ff8ba86e33689469c2b",
+            databaseURL: "https://toritome-no-kiroku-default-rtdb.firebaseio.com/"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let categoryData = { "生活": { icon: "🗝️", color: "#8b2e2e" }, "制作": { icon: "🕰️", color: "#2e4a8b" } };
+        let defaultTasks = [];
+        let categories = ["生活", "制作"];
+        let tasks = [];
+        let history = [];
+        let hobbyLogs = [];
+        let doneLogs = [];
+
+        function init() {
+            db.ref('/').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    tasks = data.tasks || [];
+                    categories = data.categories || ["生活", "制作"];
+                    categoryData = data.categoryData || categoryData;
+                    defaultTasks = data.defaultTasks || [];
+                    history = data.history || [];
+                    hobbyLogs = data.hobbyLogs || [];
+                    doneLogs = data.doneLogs || [];
+                    render();
+                    updateProgress();
+                    checkDeadlines();
+                    renderLogs();
+                    renderAchieve();
+                } else { save(); }
+            });
+
+            const now = new Date();
+            const days = ["日", "月", "火", "水", "木", "金", "土"];
+            document.getElementById('col-date').innerText = `${now.getMonth() + 1}/${now.getDate()}(${days[now.getDay()]})`;
+            const garbageDays = ["なし", "包装プラ", "燃えるごみ", "なし", "なし", "燃えるごみ", "なし"];
+            document.getElementById('col-garbage').innerHTML = `今日:${garbageDays[now.getDay()]}<br>明日:${garbageDays[(now.getDay() + 1) % 7]}`;
+            setCheerMessage();
+        }
+
+        function setCheerMessage() {
+            const hour = new Date().getHours();
+            const pool = (hour >= 5 && hour < 10) ? ["おはよう。今日も無理せず、<br>君のペースで進んでいこうね", "朝の空気は澄んでるね。<br>ゆっくり温かいものでも飲んでから始めようか"] :
+                         (hour >= 20 || hour < 5) ? ["夜更かしはほどほどにね。<br>君の健康が一番大事だよ", "今日もお疲れ様。<br>静かな夜だね。ゆっくり休んでね"] :
+                         ["お疲れ様。休憩は足りてるかな？<br>少し伸びをして、息抜きしてね", "制作の進みはどうかな？<br>根詰めすぎないようにね、同居人さん"];
+            document.getElementById('random-cheer').innerHTML = pool[Math.floor(Math.random() * pool.length)];
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            app.innerHTML = "";
+            categories.forEach((cat, index) => {
+                const info = categoryData[cat] || { icon: "🏷️", color: "#ccc" };
+                let html = `<div class="category-section">
+                    <div class="cat-header">
+                        <div class="cat-title" onclick="toggleFolder('${cat}')">
+                            <h2 style="border-left-color: ${info.color}; color: ${info.color};" onclick="event.stopPropagation(); editCategory('${cat}')"><span>${info.icon}</span>${cat}</h2>
+                            <span id="arrow-${cat}" style="margin-left:8px; font-size:0.7rem">▶</span>
+                        </div>
+                        <div class="order-btns">
+                            <button class="order-btn" onclick="moveCat(${index}, -1)">↑</button>
+                            <button class="order-btn" onclick="moveCat(${index}, 1)">↓</button>
+                            <button class="order-btn" onclick="deleteCategory('${cat}')" style="color:#d1c4b9">✕</button>
+                        </div>
+                    </div>
+                    <div id="list-${cat}" class="task-list">`;
+                tasks.filter(t => t.cat === cat).forEach(task => {
+                    html += `<div class="task-item"><div class="task-main ${task.checked ? 'task-done' : ''}"><div><input type="checkbox" ${task.checked ? 'checked' : ''} onclick="toggleTask(${task.id})">${task.text}${task.deadline ? `<span class="deadline-tag">〆:${task.deadline}</span>`:''}</div>
+                    <div class="task-actions"><button class="action-btn" onclick="moveTask(${task.id})">移</button><button class="action-btn" onclick="deleteTask(${task.id})">✕</button></div></div><div class="memo-text" onclick="editMemo(${task.id})">${task.memo || '…'}</div></div>`;
+                });
+                html += `<div style="margin-top:10px; display:flex; flex-direction:column; gap:5px">
+                    <input type="text" id="in-${cat}" placeholder="タスクを追加" style="border:none; border-bottom:1px solid #ddd; font-size:0.8rem; padding:4px; background:transparent;">
+                    <div style="display:flex; gap:5px; align-items:center;"><input type="text" id="dl-${cat}" placeholder="〆切" style="flex:1; border:none; border-bottom:1px solid #ddd; font-size:0.7rem; background:transparent;"><label style="font-size:0.6rem; color:#888;"><input type="checkbox" id="rep-${cat}">毎月</label>
+                    <button onclick="addTask('${cat}')" style="background:var(--bg); color:white; border:none; border-radius:4px; padding:4px 8px; font-size:0.7rem;">追加</button></div></div></div></div>`;
+                app.innerHTML += html;
+            });
+        }
+
+        function addCategory() {
+            const name = prompt("カテゴリ名:");
+            if (!name) return;
+            const icon = prompt("アイコン（絵文字など）:", "🏷️");
+            const color = prompt("色（#8b2e2e など）:", "#8b2e2e");
+            categories.push(name);
+            categoryData[name] = { icon: icon || "🏷️", color: color || "#ccc" };
+            save();
+        }
+
+        function editCategory(oldName) {
+            const newName = prompt("新しいカテゴリ名:", oldName);
+            if (!newName) return;
+            const icon = prompt("アイコン:", categoryData[oldName].icon);
+            const color = prompt("色:", categoryData[oldName].color);
+            
+            const info = { icon, color };
+            if (newName !== oldName) {
+                categories = categories.map(c => c === oldName ? newName : c);
+                categoryData[newName] = info;
+                delete categoryData[oldName];
+                tasks.forEach(t => { if(t.cat === oldName) t.cat = newName; });
+                defaultTasks.forEach(t => { if(t.cat === oldName) t.cat = newName; });
+            } else {
+                categoryData[oldName] = info;
+            }
+            save();
+        }
+
+        function deleteCategory(name) { if(confirm(`${name} カテゴリを削除しますか？`)) { categories = categories.filter(c => c !== name); delete categoryData[name]; save(); } }
+        function save() { db.ref('/').set({ tasks, categories, categoryData, history, hobbyLogs, doneLogs, defaultTasks }); }
+        function addTask(cat) { const val = document.getElementById(`in-${cat}`).value; const dl = document.getElementById(`dl-${cat}`).value; const isMonthly = document.getElementById(`rep-${cat}`).checked; if(!val) return; const newTask = { id: Date.now(), cat, text: val, checked: false, memo: "", deadline: dl || null }; tasks.push(newTask); if(isMonthly) defaultTasks.push({ ...newTask, id: Date.now() + 1 }); save(); }
+        function moveTask(taskId) { const newCat = prompt("移動先カテゴリ:\n" + categories.join(", ")); if (newCat && categories.includes(newCat)) { const t = tasks.find(x => x.id === taskId); if (t) t.cat = newCat; save(); } }
+        function moveCat(index, dir) { const ni = index + dir; if (ni >= 0 && ni < categories.length) { [categories[index], categories[ni]] = [categories[ni], categories[index]]; save(); } }
+        function toggleTask(id) { const t = tasks.find(x => x.id === id); if(t){ t.checked = !t.checked; save(); } }
+        function toggleSection(id, arrowId) { const c = document.getElementById(id); const a = document.getElementById(arrowId); const h = c.style.display === "none" || c.style.display === ""; c.style.display = h ? "block" : "none"; a.innerText = h ? "▼" : "▶"; }
+        function toggleFolder(cat) { const l = document.getElementById(`list-${cat}`); const a = document.getElementById(`arrow-${cat}`); const h = l.style.display === "none" || l.style.display === ""; l.style.display = h ? "block" : "none"; a.innerText = h ? "▼" : "▶"; }
+        function deleteTask(id) { if(confirm("消去しますか？")){ tasks = tasks.filter(x => x.id !== id); save(); } }
+        function editMemo(id) { const t = tasks.find(x => x.id === id); const m = prompt("きろく", t.memo); if(m!==null){ t.memo=m; save(); } }
+        function updateProgress() { const p = tasks.length ? (tasks.filter(t => t.checked).length / tasks.length) * 100 : 0; document.getElementById('progress-bar').style.width = p + "%"; }
+        function addLog() { const i = document.getElementById('log-input'); if(!i.value) return; hobbyLogs.unshift({ text: i.value, date: new Date().toLocaleDateString() }); if(hobbyLogs.length > 5) hobbyLogs.pop(); i.value = ""; save(); }
+        function renderLogs() { document.getElementById('log-list').innerHTML = hobbyLogs.map(l => `<div class="log-item"><span>${l.text}</span><span style="opacity:0.5; font-size:0.5rem">${l.date}</span></div>`).join(''); }
+        function addAchieve() { const i = document.getElementById('achieve-input'); if(!i.value) return; doneLogs.unshift({ text: i.value, date: new Date().toLocaleDateString() }); if(doneLogs.length > 5) doneLogs.pop(); i.value = ""; save(); }
+        function renderAchieve() { document.getElementById('achieve-list').innerHTML = doneLogs.map(l => `<div class="log-item"><span>${l.text}</span><span style="opacity:0.5; font-size:0.5rem">${l.date}</span></div>`).join(''); }
+
+        function checkDeadlines() {
+            const area = document.getElementById('deadline-alert-area');
+            const near = tasks.find(t => !t.checked && t.deadline && t.deadline.includes('月'));
+            if (near) {
+                area.style.display = "block";
+                area.innerText = `⚠️ 締切注意！　${(categoryData[near.cat]||{}).icon || '🏷️'}${near.text}`;
+            } else { area.style.display = "none"; }
+        }
+
+        let ts = 1500, ti = null;
+        function toggleTimer() {
+            const b = document.getElementById('timer-btn'), s = document.getElementById('steam-icon');
+            if (ti) { clearInterval(ti); ti = null; b.innerText = "Start"; s.style.opacity = 1; }
+            else { b.innerText = "Stop"; ti = setInterval(() => { ts--; const m = Math.floor(ts/60), sec = ts%60; document.getElementById('timer-display').innerText = `${m}:${sec<10?'0':''}${sec}`; s.style.opacity = 0.3 + (ts / 1500) * 0.7; if(ts<=0){ clearInterval(ti); alert("ひと息つこう☕"); } }, 1000); }
+        }
+
+        async function archiveAndReset() { if(!confirm("帳をめくりますか？")) return; history.unshift({ label: `${new Date().getFullYear()}年${new Date().getMonth()+1}月`, items: tasks.filter(t => t.checked).map(t => ({ text: t.text })) }); tasks = JSON.parse(JSON.stringify(defaultTasks)); hobbyLogs = []; doneLogs = []; save(); }
+        function toggleHistory() { const h = document.getElementById('history-area'); h.style.display = h.style.display === 'none' ? 'block' : 'none'; if(h.style.display === 'block') document.getElementById('history-list').innerHTML = history.map(m => `<div style="background:rgba(255,255,255,0.1); padding:10px; border-radius:8px; margin-bottom:10px;"><small>${m.label}のあゆみ</small><div style="display:flex; flex-wrap:wrap; gap:3px; margin-top:5px;">${m.items.map(() => '☕').join('')}</div></div>`).join(''); }
+
+        init();
+    </script>
+</body>
+</html>
