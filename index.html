@@ -3,16 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>とりとめのないきろく</title>
+    <meta name="robots" content="noindex,nofollow">
     <link rel="apple-touch-icon" href="https://fav.farm/%E2%98%95">
+    <title>☕️とりとめのないきろく</title>
     <link href="https://fonts.googleapis.com/css2?family=Shizuru&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-auth-compat.js"></script>
     <style>
         :root { --bg: #4a3b33; --card: #ffffff; --text: #463F3A; }
         body { font-family: sans-serif; background-color: var(--bg); background-image: radial-gradient(#5a4a41 1px, transparent 1px); background-size: 20px 20px; color: var(--text); padding: 15px; max-width: 500px; margin: 0 auto; padding-bottom: 100px; }
         h1 { font-family: 'Shizuru', cursive; font-size: 2.1rem; text-align: center; color: #ffffff; margin-bottom: 10px; font-weight: normal; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
         #random-cheer { text-align: center; color: #d9c5b2; font-style: italic; font-size: 0.8rem; margin-bottom: 15px; min-height: 2.4em; line-height: 1.2; }
+        .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; color: white; }
+        .login-btn { background: white; color: var(--bg); border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; margin-top: 20px; }
         .top-dashboard { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
         .column-card { background: rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 5px; backdrop-filter: blur(8px); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100px; text-align: center; border: 1px solid rgba(255,255,255,0.1); position: relative; }
         .col-icon { font-size: 1.2rem; margin-bottom: 5px; }
@@ -41,9 +45,14 @@
         .memo-text { font-size: 0.7rem; color: #888; margin-left: 25px; margin-top: 3px; font-style: italic; }
         .footer-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 20px; }
         .footer-btn { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 10px 4px; font-size: 0.65rem; font-weight: bold; cursor: pointer; text-align: center; min-height: 50px; }
+        .stamp-mark { color: #f28d8d; font-weight: bold; margin-left: 5px; }
     </style>
 </head>
 <body>
+    <div id="login-overlay" class="login-overlay">
+        <h1>☕️</h1>
+        <button class="login-btn" onclick="login()">Googleでログイン</button>
+    </div>
     <h1>とりとめのないきろく</h1>
     <div id="random-cheer"></div>
     <div class="top-dashboard">
@@ -67,19 +76,45 @@
     <div id="app"></div>
     <div class="footer-3col"><button class="footer-btn" onclick="addCategory()">＋<br>カテゴリ追加</button><button class="footer-btn" onclick="archiveAndReset()">帳を<br>めくる</button><button class="footer-btn" onclick="toggleHistory()">あゆみを<br>見返す</button></div>
     <div id="history-area" style="display:none; color:white; margin-top:20px;"><div id="history-list"></div></div>
+
     <script>
         const firebaseConfig = { apiKey: "AIzaSyA6DGhK7y6iU-xBwL7cUAjCxfC5SM3IZoA", authDomain: "toritome-no-kiroku.firebaseapp.com", projectId: "toritome-no-kiroku", databaseURL: "https://toritome-no-kiroku-default-rtdb.firebaseio.com/" };
-        firebase.initializeApp(firebaseConfig); const db = firebase.database();
-        let categoryData = { "生活": { icon: "🗝️", color: "#8b2e2e" }, "制作": { icon: "🕰️", color: "#2e4a8b" } };
-        let defaultTasks = [], categories = ["生活", "制作"], tasks = [], history = [], hobbyLogs = [], doneLogs = [];
+        firebase.initializeApp(firebaseConfig); 
+        const db = firebase.database();
+        const auth = firebase.auth();
+        let tasks = [], categories = ["生活", "制作"], categoryData = {}, history = [], hobbyLogs = [], doneLogs = [], defaultTasks = [];
+
+        function login() { const provider = new firebase.auth.GoogleAuthProvider(); auth.signInWithRedirect(provider); }
+        auth.onAuthStateChanged((user) => { if (user) { document.getElementById('login-overlay').style.display = 'none'; init(); } else { document.getElementById('login-overlay').style.display = 'flex'; } });
+
         function init() {
-            db.ref('/').on('value', (s) => { const d = s.val(); if (d) { tasks = d.tasks || []; categories = d.categories || ["生活", "制作"]; categoryData = d.categoryData || categoryData; defaultTasks = d.defaultTasks || []; history = d.history || []; hobbyLogs = d.hobbyLogs || []; doneLogs = d.doneLogs || []; render(); updateProgress(); checkDeadlines(); renderLogs(); renderAchieve(); } else { save(); } });
+            db.ref('/').on('value', (s) => {
+                const d = s.val();
+                if (d) {
+                    tasks = d.tasks || []; categories = d.categories || ["生活", "制作"];
+                    categoryData = d.categoryData || { "生活": { icon: "🗝️", color: "#8b2e2e" }, "制作": { icon: "🕰️", color: "#2e4a8b" } };
+                    defaultTasks = d.defaultTasks || []; history = d.history || [];
+                    hobbyLogs = d.hobbyLogs || []; doneLogs = d.doneLogs || [];
+                    render(); updateProgress(); checkDeadlines(); renderLogs(); renderAchieve(); updateWorkCheer();
+                }
+            });
             const now = new Date(), days = ["日", "月", "火", "水", "木", "金", "土"];
             document.getElementById('col-date').innerText = `${now.getMonth() + 1}/${now.getDate()}(${days[now.getDay()]})`;
             const g = ["なし", "包装プラ", "燃えるごみ", "なし", "なし", "燃えるごみ", "なし"];
             document.getElementById('col-garbage').innerHTML = `今日:${g[now.getDay()]}<br>明日:${g[(now.getDay() + 1) % 7]}`;
             setCheerMessage();
         }
+
+        // 4. 制作応援ウィジェット用（制作カテゴリの進捗を確認）
+        function updateWorkCheer() {
+            const workTasks = tasks.filter(t => t.cat === "制作");
+            if (workTasks.length === 0) return;
+            const done = workTasks.filter(t => t.checked).length;
+            const ratio = done / workTasks.length;
+            if (ratio === 1) document.getElementById('random-cheer').innerText = "今日の制作、完遂だね！素晴らしいよ。";
+            else if (ratio >= 0.5) document.getElementById('random-cheer').innerText = "半分まできたね。あと少し、無理せずね。";
+        }
+
         function checkDeadlines() {
             const area = document.getElementById('date-deadline-info'); const now = new Date(); now.setHours(0,0,0,0); let alertText = "";
             tasks.filter(t => !t.checked && t.deadline).forEach(t => {
@@ -87,17 +122,19 @@
                 const dDate = new Date(now.getFullYear(), parseInt(match[1]) - 1, parseInt(match[2]));
                 const diffDays = Math.ceil((dDate - now) / 86400000); const icon = (categoryData[t.cat]||{}).icon || '🏷️';
                 if (diffDays === 0) { alertText = `⚠️ ${icon}:${t.text} (今日!)`; sendNotification("締切当日だよ！", `「${t.text}」の日だね。`); }
-                else if (diffDays === 3) sendNotification("あと3日で締切だよ", `「${t.text}」の期限が近いよ。`);
-                else if (diffDays === 7) sendNotification("あと1週間で締切だよ", `「${t.text}」は来週だね。`);
             });
             area.innerText = alertText;
         }
         function sendNotification(t, b) { if ("Notification" in window && Notification.permission === "granted") new Notification(t, { body: b, icon: "https://fav.farm/%E2%98%95" }); }
+        let ti = null;
         function toggleTimer() {
             if (Notification.permission === "default") Notification.requestPermission();
             const b = document.getElementById('timer-btn'), s = document.getElementById('steam-icon');
             if (ti) { clearInterval(ti); ti = null; b.innerText = "Start"; s.style.opacity = 1; }
-            else { b.innerText = "Stop"; ti = setInterval(() => { ts--; const m = Math.floor(ts/60), sec = ts%60; document.getElementById('timer-display').innerText = `${m}:${sec<10?'0':''}${sec}`; s.style.opacity = 0.3 + (ts/1500)*0.7; if(ts<=0){ clearInterval(ti); sendNotification("ひと息つこう☕", "タイマー終了！"); alert("ひと息つこう☕"); } }, 1000); }
+            else { 
+                b.innerText = "Stop"; let ts = 1500;
+                ti = setInterval(() => { ts--; const m = Math.floor(ts/60), sec = ts%60; document.getElementById('timer-display').innerText = `${m}:${sec<10?'0':''}${sec}`; s.style.opacity = 0.3 + (ts/1500)*0.7; if(ts<=0){ clearInterval(ti); sendNotification("ひと息つこう☕", "タイマー終了！"); alert("ひと息つこう☕"); } }, 1000); 
+            }
         }
         function render() { const app = document.getElementById('app'); app.innerHTML = ""; categories.forEach((cat, index) => { const info = categoryData[cat] || { icon: "🏷️", color: "#ccc" }; let html = `<div class="category-section"><div class="cat-header"><div class="cat-title" onclick="toggleFolder('${cat}')"><h2 style="border-left-color: ${info.color}; color: ${info.color};" onclick="event.stopPropagation(); editCategory('${cat}')"><span>${info.icon}</span>${cat}</h2><span id="arrow-${cat}" style="margin-left:8px; font-size:0.7rem">▶</span></div><div style="display:flex; gap:4px;"><button style="border:none; background:none; font-size:0.6rem; color:#888" onclick="moveCat(${index}, -1)">↑</button><button style="border:none; background:none; font-size:0.6rem; color:#888" onclick="moveCat(${index}, 1)">↓</button><button style="border:none; background:none; font-size:0.6rem; color:#ccc" onclick="deleteCategory('${cat}')">✕</button></div></div><div id="list-${cat}" class="task-list">`; tasks.filter(t => t.cat === cat).forEach(task => { html += `<div class="task-item"><div class="task-main ${task.checked ? 'task-done' : ''}"><div><input type="checkbox" ${task.checked ? 'checked' : ''} onclick="toggleTask(${task.id})">${task.text}${task.deadline ? `<span class="deadline-tag">〆:${task.deadline}</span>`:''}</div><div style="display:flex; gap:5px;"><button style="border:none; background:none; color:#bbb; font-size:0.7rem;" onclick="moveTask(${task.id})">移</button><button style="border:none; background:none; color:#bbb; font-size:0.7rem;" onclick="deleteTask(${task.id})">✕</button></div></div><div class="memo-text" onclick="editMemo(${task.id})">${task.memo || '…'}</div></div>`; }); html += `<div style="margin-top:10px; display:flex; flex-direction:column; gap:5px"><input type="text" id="in-${cat}" placeholder="タスク..." style="border:none; border-bottom:1px solid #ddd; font-size:0.8rem; background:transparent;"><div style="display:flex; gap:5px;"><input type="text" id="dl-${cat}" placeholder="〆切(5月17日)" style="flex:1; border:none; border-bottom:1px solid #ddd; font-size:0.7rem; background:transparent;"><label style="font-size:0.6rem; color:#888;"><input type="checkbox" id="rep-${cat}">毎月</label><button onclick="addTask('${cat}')" style="background:var(--bg); color:white; border:none; border-radius:4px; padding:4px 8px; font-size:0.7rem;">追加</button></div></div></div></div>`; app.innerHTML += html; }); }
         function save() { db.ref('/').set({ tasks, categories, categoryData, history, hobbyLogs, doneLogs, defaultTasks }); }
@@ -107,20 +144,37 @@
         function toggleFolder(cat) { const l = document.getElementById(`list-${cat}`), a = document.getElementById(`arrow-${cat}`), h = l.style.display === "none" || l.style.display === ""; l.style.display = h ? "block" : "none"; a.innerText = h ? "▼" : "▶"; }
         function deleteCategory(n) { if(confirm(n + " 削除？")) { categories = categories.filter(c => c !== n); delete categoryData[n]; save(); } }
         function addCategory() { const n = prompt("名:"); if (!n) return; const i = prompt("アイコン:", "🏷️"); const c = prompt("色:", "#8b2e2e"); categories.push(n); categoryData[n] = { icon: i || "🏷️", color: c || "#ccc" }; save(); }
-        function setCheerMessage() { const h = new Date().getHours(); const p = (h>=5 && h<10) ? ["おはよう。君のペースでいこうね", "朝の空気は澄んでるね"] : (h>=20 || h<5) ? ["夜更かしはほどほどにね", "今日もお疲れ様。ゆっくり休んでね"] : ["休憩は足りてるかな？", "根詰めすぎないようにね"]; document.getElementById('random-cheer').innerHTML = p[Math.floor(Math.random() * p.length)]; }
+        function setCheerMessage() { const h = new Date().getHours(); const p = (h>=5 && h<10) ? ["おはよう。君のペースでいこうね"] : (h>=20 || h<5) ? ["今日もお疲れ様。ゆっくり休んでね"] : ["根詰めすぎないようにね"]; document.getElementById('random-cheer').innerHTML = p[Math.floor(Math.random() * p.length)]; }
         function moveCat(i, d) { const ni = i + d; if (ni >= 0 && ni < categories.length) { [categories[i], categories[ni]] = [categories[ni], categories[i]]; save(); } }
         function moveTask(tid) { const nc = prompt("移動先:\n" + categories.join(", ")); if (nc && categories.includes(nc)) { const t = tasks.find(x => x.id === tid); if (t) t.cat = nc; save(); } }
         function deleteTask(id) { if(confirm("消去？")){ tasks = tasks.filter(x => x.id !== id); save(); } }
         function editMemo(id) { const t = tasks.find(x => x.id === id), m = prompt("きろく", t.memo); if(m!==null){ t.memo=m; save(); } }
-        function updateProgress() { const p = tasks.length ? (tasks.filter(t => t.checked).length / tasks.length) * 100 : 0; document.getElementById('progress-bar').style.width = p + "%"; }
+        function updateProgress() { const p = tasks.length ? (tasks.filter(t => t.checked).length / tasks.length) * 100 : 0; const pb = document.getElementById('progress-bar'); if(pb) pb.style.width = p + "%"; }
         function addLog() { const i = document.getElementById('log-input'); if(!i.value) return; hobbyLogs.unshift({ text: i.value, date: new Date().toLocaleDateString() }); if(hobbyLogs.length > 5) hobbyLogs.pop(); i.value = ""; save(); }
         function renderLogs() { document.getElementById('log-list').innerHTML = hobbyLogs.map(l => `<div class="log-item"><span>${l.text}</span><span style="opacity:0.5; font-size:0.5rem">${l.date}</span></div>`).join(''); }
         function addAchieve() { const i = document.getElementById('achieve-input'); if(!i.value) return; doneLogs.unshift({ text: i.value, date: new Date().toLocaleDateString() }); if(doneLogs.length > 5) doneLogs.pop(); i.value = ""; save(); }
         function renderAchieve() { document.getElementById('achieve-list').innerHTML = doneLogs.map(l => `<div class="log-item"><span>${l.text}</span><span style="opacity:0.5; font-size:0.5rem">${l.date}</span></div>`).join(''); }
-        let ts = 1500, ti = null;
-        async function archiveAndReset() { if(!confirm("帳をめくる？")) return; history.unshift({ label: `${new Date().getFullYear()}年${new Date().getMonth()+1}月`, items: tasks.filter(t => t.checked).map(t => ({ text: t.text })) }); tasks = JSON.parse(JSON.stringify(defaultTasks)); hobbyLogs = []; doneLogs = []; save(); }
-        function toggleHistory() { const h = document.getElementById('history-area'); h.style.display = h.style.display === 'none' ? 'block' : 'none'; if(h.style.display === 'block') document.getElementById('history-list').innerHTML = history.map(m => `<div style="background:rgba(255,255,255,0.1); padding:10px; border-radius:8px; margin-bottom:10px;"><small>${m.label}のあゆみ</small><div style="display:flex; flex-wrap:wrap; gap:3px; margin-top:5px;">${m.items.map(() => '☕').join('')}</div></div>`).join(''); }
-        init();
+        
+        // 2. スタンプカード機能（帳をめくる時に達成率でスタンプ付与）
+        async function archiveAndReset() { 
+            if(!confirm("帳をめくる？")) return; 
+            const p = tasks.length ? (tasks.filter(t => t.checked).length / tasks.length) : 0;
+            const hasStamp = p >= 0.8;
+            history.unshift({ 
+                label: `${new Date().getFullYear()}年${new Date().getMonth()+1}月`, 
+                items: tasks.filter(t => t.checked).map(t => ({ text: t.text })),
+                stamp: hasStamp
+            }); 
+            tasks = JSON.parse(JSON.stringify(defaultTasks)); hobbyLogs = []; doneLogs = []; save(); 
+        }
+        function toggleHistory() { 
+            const h = document.getElementById('history-area'); h.style.display = h.style.display === 'none' ? 'block' : 'none'; 
+            if(h.style.display === 'block') document.getElementById('history-list').innerHTML = history.map(m => `
+                <div style="background:rgba(255,255,255,0.1); padding:10px; border-radius:8px; margin-bottom:10px;">
+                    <small>${m.label}のあゆみ ${m.stamp ? '<span class="stamp-mark">☕️合格</span>' : ''}</small>
+                    <div style="display:flex; flex-wrap:wrap; gap:3px; margin-top:5px;">${m.items.map(() => '☕').join('')}</div>
+                </div>`).join(''); 
+        }
     </script>
 </body>
 </html>
