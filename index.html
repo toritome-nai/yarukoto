@@ -56,6 +56,7 @@
     <h1>とりとめのないきろく</h1>
     <div id="random-cheer"></div>
     <div class="top-dashboard">
+        <!-- 中身はそのまま -->
         <div class="column-card">
             <span class="col-icon">📅</span>
             <div class="date-info" id="col-date"></div>
@@ -84,28 +85,29 @@
         const auth = firebase.auth();
         let tasks = [], categories = ["生活", "制作"], categoryData = {}, history = [], hobbyLogs = [], doneLogs = [], defaultTasks = [];
 
-        function login() { const provider = new firebase.auth.GoogleAuthProvider(); auth.signInWithRedirect(provider); }
+        // ポップアップ方式に変更
+        function login() { 
+            const provider = new firebase.auth.GoogleAuthProvider(); 
+            auth.signInWithPopup(provider).then((result) => {
+                document.getElementById('login-overlay').style.display = 'none';
+                init();
+            }).catch((error) => {
+                alert("ログインに失敗しました。ポップアップを許可してください。");
+                console.error(error);
+            });
+        }
 
-        // ログイン状態とリダイレクト結果を確実に処理する
+        // ログイン状態の監視
         auth.onAuthStateChanged((user) => {
             if (user) {
                 document.getElementById('login-overlay').style.display = 'none';
                 init();
             } else {
-                auth.getRedirectResult().then((result) => {
-                    if (result && result.user) {
-                        document.getElementById('login-overlay').style.display = 'none';
-                        init();
-                    } else {
-                        document.getElementById('login-overlay').style.display = 'flex';
-                    }
-                }).catch((error) => {
-                    console.error("Login error:", error);
-                    document.getElementById('login-overlay').style.display = 'flex';
-                });
+                document.getElementById('login-overlay').style.display = 'flex';
             }
         });
 
+        // init以降の関数（render, saveなど）は以前のコードと同一です
         function init() {
             db.ref('/').on('value', (s) => {
                 const d = s.val();
@@ -123,37 +125,11 @@
             document.getElementById('col-garbage').innerHTML = `今日:${g[now.getDay()]}<br>明日:${g[(now.getDay() + 1) % 7]}`;
             setCheerMessage();
         }
-
-        function updateWorkCheer() {
-            const workTasks = tasks.filter(t => t.cat === "制作");
-            if (workTasks.length === 0) return;
-            const done = workTasks.filter(t => t.checked).length;
-            const ratio = done / workTasks.length;
-            if (ratio === 1) document.getElementById('random-cheer').innerText = "今日の制作、完遂だね！素晴らしいよ。";
-            else if (ratio >= 0.5) document.getElementById('random-cheer').innerText = "半分まできたね。あと少し、無理せずね。";
-        }
-
-        function checkDeadlines() {
-            const area = document.getElementById('date-deadline-info'); const now = new Date(); now.setHours(0,0,0,0); let alertText = "";
-            tasks.filter(t => !t.checked && t.deadline).forEach(t => {
-                const match = t.deadline.match(/(\d+)月(\d+)日/); if (!match) return;
-                const dDate = new Date(now.getFullYear(), parseInt(match[1]) - 1, parseInt(match[2]));
-                const diffDays = Math.ceil((dDate - now) / 86400000); const icon = (categoryData[t.cat]||{}).icon || '🏷️';
-                if (diffDays === 0) { alertText = `⚠️ ${icon}:${t.text} (今日!)`; sendNotification("締切当日だよ！", `「${t.text}」の日だね。`); }
-            });
-            area.innerText = alertText;
-        }
+        function updateWorkCheer() { const workTasks = tasks.filter(t => t.cat === "制作"); if (workTasks.length === 0) return; const done = workTasks.filter(t => t.checked).length; const ratio = done / workTasks.length; if (ratio === 1) document.getElementById('random-cheer').innerText = "今日の制作、完遂だね！素晴らしいよ。"; else if (ratio >= 0.5) document.getElementById('random-cheer').innerText = "半分まできたね。あと少し、無理せずね。"; }
+        function checkDeadlines() { const area = document.getElementById('date-deadline-info'); const now = new Date(); now.setHours(0,0,0,0); let alertText = ""; tasks.filter(t => !t.checked && t.deadline).forEach(t => { const match = t.deadline.match(/(\d+)月(\d+)日/); if (!match) return; const dDate = new Date(now.getFullYear(), parseInt(match[1]) - 1, parseInt(match[2])); const diffDays = Math.ceil((dDate - now) / 86400000); const icon = (categoryData[t.cat]||{}).icon || '🏷️'; if (diffDays === 0) { alertText = `⚠️ ${icon}:${t.text} (今日!)`; sendNotification("締切当日だよ！", `「${t.text}」の日だね。`); } }); area.innerText = alertText; }
         function sendNotification(t, b) { if ("Notification" in window && Notification.permission === "granted") new Notification(t, { body: b, icon: "https://fav.farm/%E2%98%95" }); }
         let ti = null;
-        function toggleTimer() {
-            if (Notification.permission === "default") Notification.requestPermission();
-            const b = document.getElementById('timer-btn'), s = document.getElementById('steam-icon');
-            if (ti) { clearInterval(ti); ti = null; b.innerText = "Start"; s.style.opacity = 1; }
-            else { 
-                b.innerText = "Stop"; let ts = 1500;
-                ti = setInterval(() => { ts--; const m = Math.floor(ts/60), sec = ts%60; document.getElementById('timer-display').innerText = `${m}:${sec<10?'0':''}${sec}`; s.style.opacity = 0.3 + (ts/1500)*0.7; if(ts<=0){ clearInterval(ti); sendNotification("ひと息つこう☕", "タイマー終了！"); alert("ひと息つこう☕"); } }, 1000); 
-            }
-        }
+        function toggleTimer() { if (Notification.permission === "default") Notification.requestPermission(); const b = document.getElementById('timer-btn'), s = document.getElementById('steam-icon'); if (ti) { clearInterval(ti); ti = null; b.innerText = "Start"; s.style.opacity = 1; } else { b.innerText = "Stop"; let ts = 1500; ti = setInterval(() => { ts--; const m = Math.floor(ts/60), sec = ts%60; document.getElementById('timer-display').innerText = `${m}:${sec<10?'0':''}${sec}`; s.style.opacity = 0.3 + (ts/1500)*0.7; if(ts<=0){ clearInterval(ti); sendNotification("ひと息つこう☕", "タイマー終了！"); alert("ひと息つこう☕"); } }, 1000); } }
         function render() { const app = document.getElementById('app'); app.innerHTML = ""; categories.forEach((cat, index) => { const info = categoryData[cat] || { icon: "🏷️", color: "#ccc" }; let html = `<div class="category-section"><div class="cat-header"><div class="cat-title" onclick="toggleFolder('${cat}')"><h2 style="border-left-color: ${info.color}; color: ${info.color};" onclick="event.stopPropagation(); editCategory('${cat}')"><span>${info.icon}</span>${cat}</h2><span id="arrow-${cat}" style="margin-left:8px; font-size:0.7rem">▶</span></div><div style="display:flex; gap:4px;"><button style="border:none; background:none; font-size:0.6rem; color:#888" onclick="moveCat(${index}, -1)">↑</button><button style="border:none; background:none; font-size:0.6rem; color:#888" onclick="moveCat(${index}, 1)">↓</button><button style="border:none; background:none; font-size:0.6rem; color:#ccc" onclick="deleteCategory('${cat}')">✕</button></div></div><div id="list-${cat}" class="task-list">`; tasks.filter(t => t.cat === cat).forEach(task => { html += `<div class="task-item"><div class="task-main ${task.checked ? 'task-done' : ''}"><div><input type="checkbox" ${task.checked ? 'checked' : ''} onclick="toggleTask(${task.id})">${task.text}${task.deadline ? `<span class="deadline-tag">〆:${task.deadline}</span>`:''}</div><div style="display:flex; gap:5px;"><button style="border:none; background:none; color:#bbb; font-size:0.7rem;" onclick="moveTask(${task.id})">移</button><button style="border:none; background:none; color:#bbb; font-size:0.7rem;" onclick="deleteTask(${task.id})">✕</button></div></div><div class="memo-text" onclick="editMemo(${task.id})">${task.memo || '…'}</div></div>`; }); html += `<div style="margin-top:10px; display:flex; flex-direction:column; gap:5px"><input type="text" id="in-${cat}" placeholder="タスク..." style="border:none; border-bottom:1px solid #ddd; font-size:0.8rem; background:transparent;"><div style="display:flex; gap:5px;"><input type="text" id="dl-${cat}" placeholder="〆切(5月17日)" style="flex:1; border:none; border-bottom:1px solid #ddd; font-size:0.7rem; background:transparent;"><label style="font-size:0.6rem; color:#888;"><input type="checkbox" id="rep-${cat}">毎月</label><button onclick="addTask('${cat}')" style="background:var(--bg); color:white; border:none; border-radius:4px; padding:4px 8px; font-size:0.7rem;">追加</button></div></div></div></div>`; app.innerHTML += html; }); }
         function save() { db.ref('/').set({ tasks, categories, categoryData, history, hobbyLogs, doneLogs, defaultTasks }); }
         function addTask(cat) { const v = document.getElementById(`in-${cat}`).value, d = document.getElementById(`dl-${cat}`).value, r = document.getElementById(`rep-${cat}`).checked; if(!v) return; const nt = { id: Date.now(), cat, text: v, checked: false, memo: "", deadline: d || null }; tasks.push(nt); if(r) defaultTasks.push({ ...nt, id: Date.now() + 1 }); save(); }
@@ -172,26 +148,8 @@
         function renderLogs() { document.getElementById('log-list').innerHTML = hobbyLogs.map(l => `<div class="log-item"><span>${l.text}</span><span style="opacity:0.5; font-size:0.5rem">${l.date}</span></div>`).join(''); }
         function addAchieve() { const i = document.getElementById('achieve-input'); if(!i.value) return; doneLogs.unshift({ text: i.value, date: new Date().toLocaleDateString() }); if(doneLogs.length > 5) doneLogs.pop(); i.value = ""; save(); }
         function renderAchieve() { document.getElementById('achieve-list').innerHTML = doneLogs.map(l => `<div class="log-item"><span>${l.text}</span><span style="opacity:0.5; font-size:0.5rem">${l.date}</span></div>`).join(''); }
-        
-        async function archiveAndReset() { 
-            if(!confirm("帳をめくる？")) return; 
-            const p = tasks.length ? (tasks.filter(t => t.checked).length / tasks.length) : 0;
-            const hasStamp = p >= 0.8;
-            history.unshift({ 
-                label: `${new Date().getFullYear()}年${new Date().getMonth()+1}月`, 
-                items: tasks.filter(t => t.checked).map(t => ({ text: t.text })),
-                stamp: hasStamp
-            }); 
-            tasks = JSON.parse(JSON.stringify(defaultTasks)); hobbyLogs = []; doneLogs = []; save(); 
-        }
-        function toggleHistory() { 
-            const h = document.getElementById('history-area'); h.style.display = h.style.display === 'none' ? 'block' : 'none'; 
-            if(h.style.display === 'block') document.getElementById('history-list').innerHTML = history.map(m => `
-                <div style="background:rgba(255,255,255,0.1); padding:10px; border-radius:8px; margin-bottom:10px;">
-                    <small>${m.label}のあゆみ ${m.stamp ? '<span class="stamp-mark">☕️合格</span>' : ''}</small>
-                    <div style="display:flex; flex-wrap:wrap; gap:3px; margin-top:5px;">${m.items.map(() => '☕').join('')}</div>
-                </div>`).join(''); 
-        }
+        async function archiveAndReset() { if(!confirm("帳をめくる？")) return; const p = tasks.length ? (tasks.filter(t => t.checked).length / tasks.length) : 0; const hasStamp = p >= 0.8; history.unshift({ label: `${new Date().getFullYear()}年${new Date().getMonth()+1}月`, items: tasks.filter(t => t.checked).map(t => ({ text: t.text })), stamp: hasStamp }); tasks = JSON.parse(JSON.stringify(defaultTasks)); hobbyLogs = []; doneLogs = []; save(); }
+        function toggleHistory() { const h = document.getElementById('history-area'); h.style.display = h.style.display === 'none' ? 'block' : 'none'; if(h.style.display === 'block') document.getElementById('history-list').innerHTML = history.map(m => `<div style="background:rgba(255,255,255,0.1); padding:10px; border-radius:8px; margin-bottom:10px;"><small>${m.label}のあゆみ ${m.stamp ? '<span class="stamp-mark">☕️合格</span>' : ''}</small><div style="display:flex; flex-wrap:wrap; gap:3px; margin-top:5px;">${m.items.map(() => '☕').join('')}</div></div>`).join(''); }
     </script>
 </body>
 </html>
