@@ -85,7 +85,26 @@
         let tasks = [], categories = ["生活", "制作"], categoryData = {}, history = [], hobbyLogs = [], doneLogs = [], defaultTasks = [];
 
         function login() { const provider = new firebase.auth.GoogleAuthProvider(); auth.signInWithRedirect(provider); }
-        auth.onAuthStateChanged((user) => { if (user) { document.getElementById('login-overlay').style.display = 'none'; init(); } else { document.getElementById('login-overlay').style.display = 'flex'; } });
+
+        // ログイン状態とリダイレクト結果を確実に処理する
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                document.getElementById('login-overlay').style.display = 'none';
+                init();
+            } else {
+                auth.getRedirectResult().then((result) => {
+                    if (result && result.user) {
+                        document.getElementById('login-overlay').style.display = 'none';
+                        init();
+                    } else {
+                        document.getElementById('login-overlay').style.display = 'flex';
+                    }
+                }).catch((error) => {
+                    console.error("Login error:", error);
+                    document.getElementById('login-overlay').style.display = 'flex';
+                });
+            }
+        });
 
         function init() {
             db.ref('/').on('value', (s) => {
@@ -105,7 +124,6 @@
             setCheerMessage();
         }
 
-        // 4. 制作応援ウィジェット用（制作カテゴリの進捗を確認）
         function updateWorkCheer() {
             const workTasks = tasks.filter(t => t.cat === "制作");
             if (workTasks.length === 0) return;
@@ -155,7 +173,6 @@
         function addAchieve() { const i = document.getElementById('achieve-input'); if(!i.value) return; doneLogs.unshift({ text: i.value, date: new Date().toLocaleDateString() }); if(doneLogs.length > 5) doneLogs.pop(); i.value = ""; save(); }
         function renderAchieve() { document.getElementById('achieve-list').innerHTML = doneLogs.map(l => `<div class="log-item"><span>${l.text}</span><span style="opacity:0.5; font-size:0.5rem">${l.date}</span></div>`).join(''); }
         
-        // 2. スタンプカード機能（帳をめくる時に達成率でスタンプ付与）
         async function archiveAndReset() { 
             if(!confirm("帳をめくる？")) return; 
             const p = tasks.length ? (tasks.filter(t => t.checked).length / tasks.length) : 0;
